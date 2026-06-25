@@ -19,13 +19,19 @@ export function CompassShell({ target }: CompassShellProps) {
         data-lng={target.lng}
         data-name={title}
       >
-        <div className="flex w-full max-w-md items-start justify-between gap-2">
+        <div className="mx-auto flex w-full max-w-md items-start justify-between gap-2">
           <Link
             href="/"
             className="rounded-full border border-[#d4af37]/30 px-3 py-1.5 text-xs text-[#c4b59a]"
           >
             ← Home
           </Link>
+          <a
+            href="/setup"
+            className="rounded-full border border-[#d4af37]/30 px-3 py-1.5 text-xs text-[#f5e6c8]"
+          >
+            Change place
+          </a>
         </div>
 
         <div
@@ -64,6 +70,12 @@ export function CompassShell({ target }: CompassShellProps) {
             <h1 className="mt-1 max-w-xs font-serif text-lg text-[#f5e6c8] line-clamp-2">
               {title}
             </h1>
+            <a
+              href="/setup"
+              className="mt-2 inline-block text-xs text-[#d4af37] underline underline-offset-2"
+            >
+              Search or drop a new pin
+            </a>
           </div>
 
           <div className="relative aspect-square w-full max-w-[min(85vw,360px)]">

@@ -87,13 +87,28 @@ export function CompassView({ mode, target, showShare = true }: CompassViewProps
 
   return (
     <div className="relative flex min-h-dvh flex-col bg-[#1a1410] px-4 py-8">
-      <div className="flex w-full max-w-md items-start justify-between gap-2">
+      <div className="mx-auto flex w-full max-w-md flex-wrap items-start justify-between gap-2">
         <Link
           href="/"
           className="rounded-full border border-[#d4af37]/30 px-3 py-1.5 text-xs text-[#c4b59a]"
         >
           ← Home
         </Link>
+        {mode === "place" ? (
+          <a
+            href="/setup"
+            className="rounded-full border border-[#d4af37]/30 px-3 py-1.5 text-xs text-[#f5e6c8]"
+          >
+            Change place
+          </a>
+        ) : (
+          <a
+            href="/setup"
+            className="rounded-full border border-[#d4af37]/30 px-3 py-1.5 text-xs text-[#f5e6c8]"
+          >
+            Point elsewhere
+          </a>
+        )}
         {showShare && shareUrl && (
           <ShareTarget url={shareUrl} label="Share this place" />
         )}
@@ -141,6 +156,14 @@ export function CompassView({ mode, target, showShare = true }: CompassViewProps
           <h1 className="mt-1 max-w-xs font-serif text-lg text-[#f5e6c8] line-clamp-2">
             {title}
           </h1>
+          {mode === "place" && (
+            <a
+              href="/setup"
+              className="mt-2 inline-block text-xs text-[#d4af37] underline underline-offset-2"
+            >
+              Search or drop a new pin
+            </a>
+          )}
         </div>
 
         <div className="relative aspect-square w-full max-w-[min(85vw,360px)]">
