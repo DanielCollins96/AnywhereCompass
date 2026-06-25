@@ -1,16 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { DevNetworkHint } from "@/components/DevNetworkHint";
-import { getParkingSpot } from "@/lib/parking-storage";
+import { useState, useSyncExternalStore } from "react";
+import {
+  hasParkingSpot,
+  subscribeParkingSpot,
+} from "@/lib/parking-storage";
 
 export function ModePicker() {
-  const [hasParking, setHasParking] = useState(false);
-
-  useEffect(() => {
-    setHasParking(getParkingSpot() != null);
-  }, []);
+  const hasParking = useSyncExternalStore(
+    subscribeParkingSpot,
+    hasParkingSpot,
+    () => false,
+  );
 
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center gap-10 bg-[#1a1410] px-6">
@@ -38,16 +40,14 @@ export function ModePicker() {
             Find my car
           </Link>
         ) : (
-          <SaveCarButton onSaved={() => setHasParking(true)} />
+          <SaveCarButton />
         )}
       </div>
-
-      <DevNetworkHint />
     </div>
   );
 }
 
-function SaveCarButton({ onSaved }: { onSaved: () => void }) {
+function SaveCarButton() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -67,7 +67,6 @@ function SaveCarButton({ onSaved }: { onSaved: () => void }) {
         saveParkingSpot({ lat, lng, label });
         setSaving(false);
         setMessage("Car saved!");
-        onSaved();
       },
       () => {
         setSaving(false);

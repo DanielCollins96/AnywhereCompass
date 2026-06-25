@@ -6,6 +6,12 @@ export async function GET(request: NextRequest) {
   if (!q) {
     return NextResponse.json([]);
   }
+  if (q.length > 200) {
+    return NextResponse.json(
+      { error: "Search query is too long" },
+      { status: 400 },
+    );
+  }
 
   try {
     const results = await fetchPhotonSearch(q);

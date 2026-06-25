@@ -39,8 +39,12 @@ export function MapPinPicker({ onSelect }: MapPinPickerProps) {
   async function confirm() {
     if (!pin) return;
     setConfirming(true);
-    const name = (await reverseGeocode(pin.lat, pin.lng)) ?? "Dropped pin";
-    onSelect({ lat: pin.lat, lng: pin.lng, name });
+    try {
+      const name = (await reverseGeocode(pin.lat, pin.lng)) ?? "Dropped pin";
+      onSelect({ lat: pin.lat, lng: pin.lng, name });
+    } finally {
+      setConfirming(false);
+    }
   }
 
   return (

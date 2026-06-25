@@ -6,6 +6,17 @@ export type CompassTarget = {
 
 export type CompassMode = "place" | "parking";
 
+export function isValidCoordinate(lat: number, lng: number): boolean {
+  return (
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    lat >= -90 &&
+    lat <= 90 &&
+    lng >= -180 &&
+    lng <= 180
+  );
+}
+
 export function buildPlaceUrl(
   target: CompassTarget,
   origin?: string,
@@ -21,9 +32,11 @@ export function buildPlaceUrl(
 }
 
 export function parseToParam(to: string): CompassTarget | null {
-  const [latStr, lngStr] = to.split(",");
-  const lat = parseFloat(latStr);
-  const lng = parseFloat(lngStr);
-  if (Number.isNaN(lat) || Number.isNaN(lng)) return null;
+  const parts = to.split(",");
+  if (parts.length !== 2) return null;
+
+  const lat = Number(parts[0].trim());
+  const lng = Number(parts[1].trim());
+  if (!isValidCoordinate(lat, lng)) return null;
   return { lat, lng };
 }

@@ -9,22 +9,22 @@ type DeviceOrientationEventConstructor = typeof DeviceOrientationEvent & {
 
 export function useDeviceOrientation(enabled: boolean) {
   const [heading, setHeading] = useState<number | null>(null);
-  const [needsPermission, setNeedsPermission] = useState(false);
   const [permissionGranted, setPermissionGranted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const usingAbsoluteRef = useRef(false);
   const lastEventRef = useRef<DeviceOrientationEvent | null>(null);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const ctor = DeviceOrientationEvent as DeviceOrientationEventConstructor;
-    const requiresPermission = typeof ctor.requestPermission === "function";
-    setNeedsPermission(requiresPermission);
-    if (!requiresPermission) setPermissionGranted(true);
-  }, []);
+  const needsPermission =
+    typeof DeviceOrientationEvent !== "undefined" &&
+    typeof (DeviceOrientationEvent as DeviceOrientationEventConstructor)
+      .requestPermission === "function";
 
   const requestPermission = useCallback(async () => {
     try {
+      if (typeof DeviceOrientationEvent === "undefined") {
+        setError("Compass sensor is not available in this browser");
+        return false;
+      }
       const ctor = DeviceOrientationEvent as DeviceOrientationEventConstructor;
       if (typeof ctor.requestPermission === "function") {
         const result = await ctor.requestPermission();
@@ -43,7 +43,7 @@ export function useDeviceOrientation(enabled: boolean) {
   }, []);
 
   useEffect(() => {
-    if (!enabled || !permissionGranted) return;
+    if (!enabled || (needsPermission && !permissionGranted)) return;
 
     usingAbsoluteRef.current = false;
 
@@ -79,7 +79,7 @@ export function useDeviceOrientation(enabled: boolean) {
       window.removeEventListener("deviceorientation", handleOrientation, true);
       screen.orientation?.removeEventListener("change", onScreenChange);
     };
-  }, [enabled, permissionGranted]);
+  }, [enabled, needsPermission, permissionGranted]);
 
   return {
     heading,
