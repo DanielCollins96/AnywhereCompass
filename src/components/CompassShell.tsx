@@ -127,6 +127,7 @@ export function CompassShell({ target }: CompassShellProps) {
         </div>
       </div>
 
+      <Script src="/compass-heading.js" strategy="beforeInteractive" />
       <Script src="/compass.js" strategy="afterInteractive" />
     </>
   );

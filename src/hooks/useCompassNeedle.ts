@@ -5,9 +5,9 @@ import {
   bearing,
   distanceMeters,
   isAligned,
-  normalizeAngle,
   type LatLng,
 } from "@/lib/bearing";
+import { needleAngle } from "@/lib/compass-heading";
 
 export function useCompassNeedle(
   position: LatLng | null,
@@ -28,15 +28,15 @@ export function useCompassNeedle(
     const targetBearing = bearing(position, target);
     const dist = distanceMeters(position, target);
     const hasCompass = deviceHeading != null;
-    const needleAngle = hasCompass
-      ? normalizeAngle(targetBearing - deviceHeading!)
+    const angle = hasCompass
+      ? needleAngle(targetBearing, deviceHeading!)
       : targetBearing;
 
     return {
-      needleAngle,
+      needleAngle: angle,
       targetBearing,
       distance: dist,
-      aligned: hasCompass && isAligned(needleAngle),
+      aligned: hasCompass && isAligned(angle),
       hasCompass,
     };
   }, [position, deviceHeading, target]);

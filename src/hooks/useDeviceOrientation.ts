@@ -1,39 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-
-type DeviceOrientationEventWithWebkit = DeviceOrientationEvent & {
-  webkitCompassHeading?: number;
-};
+import { useCallback, useEffect, useRef, useState } from "react";
+import { readDeviceHeading } from "@/lib/compass-heading";
 
 type DeviceOrientationEventConstructor = typeof DeviceOrientationEvent & {
   requestPermission?: () => Promise<PermissionState>;
 };
-
-function readHeading(event: DeviceOrientationEvent): number | null {
-  const e = event as DeviceOrientationEventWithWebkit;
-
-  if (
-    typeof e.webkitCompassHeading === "number" &&
-    !Number.isNaN(e.webkitCompassHeading)
-  ) {
-    return e.webkitCompassHeading;
-  }
-
-  if (event.alpha == null) return null;
-
-  if (event.absolute) {
-    return (360 - event.alpha) % 360;
-  }
-
-  return (360 - event.alpha) % 360;
-}
 
 export function useDeviceOrientation(enabled: boolean) {
   const [heading, setHeading] = useState<number | null>(null);
   const [needsPermission, setNeedsPermission] = useState(false);
   const [permissionGranted, setPermissionGranted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const usingAbsoluteRef = useRef(false);
+  const lastEventRef = useRef<DeviceOrientationEvent | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -65,13 +45,30 @@ export function useDeviceOrientation(enabled: boolean) {
   useEffect(() => {
     if (!enabled || !permissionGranted) return;
 
+    usingAbsoluteRef.current = false;
+
     const handleOrientation = (event: DeviceOrientationEvent) => {
-      const nextHeading = readHeading(event);
+      if (event.type === "deviceorientationabsolute") {
+        usingAbsoluteRef.current = true;
+      } else if (usingAbsoluteRef.current) {
+        return;
+      }
+
+      lastEventRef.current = event;
+      const nextHeading = readDeviceHeading(event);
       if (nextHeading != null) setHeading(nextHeading);
     };
 
     window.addEventListener("deviceorientationabsolute", handleOrientation, true);
     window.addEventListener("deviceorientation", handleOrientation, true);
+
+    const onScreenChange = () => {
+      const event = lastEventRef.current;
+      if (!event) return;
+      const nextHeading = readDeviceHeading(event);
+      if (nextHeading != null) setHeading(nextHeading);
+    };
+    screen.orientation?.addEventListener("change", onScreenChange);
 
     return () => {
       window.removeEventListener(
@@ -80,6 +77,7 @@ export function useDeviceOrientation(enabled: boolean) {
         true,
       );
       window.removeEventListener("deviceorientation", handleOrientation, true);
+      screen.orientation?.removeEventListener("change", onScreenChange);
     };
   }, [enabled, permissionGranted]);
 

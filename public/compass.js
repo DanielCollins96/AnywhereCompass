@@ -1,21 +1,27 @@
 (function () {
-  const root = document.getElementById("compass-app");
+  var CH = window.CompassHeading;
+  if (!CH) return;
+
+  var root = document.getElementById("compass-app");
   if (!root) return;
 
-  const target = {
+  var target = {
     lat: parseFloat(root.dataset.lat),
     lng: parseFloat(root.dataset.lng),
     name: root.dataset.name || "Destination",
   };
 
-  const btn = document.getElementById("compass-start-btn");
-  const statusEl = document.getElementById("compass-status");
-  const distanceEl = document.getElementById("compass-distance");
-  const bearingEl = document.getElementById("compass-bearing");
-  const needleWrap = document.getElementById("compass-needle-wrap");
+  var btn = document.getElementById("compass-start-btn");
+  var statusEl = document.getElementById("compass-status");
+  var distanceEl = document.getElementById("compass-distance");
+  var bearingEl = document.getElementById("compass-bearing");
+  var needleWrap = document.getElementById("compass-needle-wrap");
 
-  let userPos = null;
-  let watchId = null;
+  var userPos = null;
+  var watchId = null;
+  var lastDeviceHeading = null;
+  var usingAbsoluteOrientation = false;
+  var lastOrientationEvent = null;
 
   function setStatus(text) {
     if (statusEl) statusEl.textContent = text;
@@ -29,30 +35,26 @@
     return (rad * 180) / Math.PI;
   }
 
-  function normalizeAngle(deg) {
-    return ((deg % 360) + 360) % 360;
-  }
-
   function bearing(from, to) {
-    const lat1 = toRad(from.lat);
-    const lat2 = toRad(to.lat);
-    const dLng = toRad(to.lng - from.lng);
-    const y = Math.sin(dLng) * Math.cos(lat2);
-    const x =
+    var lat1 = toRad(from.lat);
+    var lat2 = toRad(to.lat);
+    var dLng = toRad(to.lng - from.lng);
+    var y = Math.sin(dLng) * Math.cos(lat2);
+    var x =
       Math.cos(lat1) * Math.sin(lat2) -
       Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
-    return normalizeAngle(toDeg(Math.atan2(y, x)));
+    return CH.normalizeAngle(toDeg(Math.atan2(y, x)));
   }
 
   function distanceMeters(from, to) {
-    const R = 6371000;
-    const lat1 = toRad(from.lat);
-    const lat2 = toRad(to.lat);
-    const dLat = toRad(to.lat - from.lat);
-    const dLng = toRad(to.lng - from.lng);
-    const a =
-      Math.sin(dLat / 2) ** 2 +
-      Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+    var R = 6371000;
+    var lat1 = toRad(from.lat);
+    var lat2 = toRad(to.lat);
+    var dLat = toRad(to.lat - from.lat);
+    var dLng = toRad(to.lng - from.lng);
+    var a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
 
@@ -61,36 +63,60 @@
     return (meters / 1000).toFixed(1) + " km";
   }
 
-  function readHeading(event) {
-    if (typeof event.webkitCompassHeading === "number") {
-      return event.webkitCompassHeading;
-    }
-    if (event.alpha == null) return null;
-    return normalizeAngle(360 - event.alpha);
-  }
-
   function updateNeedle(deviceHeading) {
     if (!userPos || !needleWrap) return;
-    const b = bearing(userPos, target);
-    const angle = deviceHeading != null ? normalizeAngle(b - deviceHeading) : b;
+
+    if (deviceHeading != null) {
+      lastDeviceHeading = deviceHeading;
+    }
+
+    var heading = lastDeviceHeading;
+    var b = bearing(userPos, target);
+    var angle =
+      heading != null ? CH.needleAngle(b, heading) : b;
+
     needleWrap.style.transform = "rotate(" + angle + "deg)";
-    if (distanceEl) distanceEl.textContent = formatDistance(distanceMeters(userPos, target));
+
+    if (distanceEl) {
+      distanceEl.textContent = formatDistance(distanceMeters(userPos, target));
+    }
     if (bearingEl) {
-      bearingEl.textContent =
-        deviceHeading != null
-          ? "Rotate device — needle points to target"
-          : "Target bearing: " + Math.round(b) + "° from north";
+      if (heading != null) {
+        bearingEl.textContent =
+          "Hold phone upright — needle points toward " + target.name;
+      } else {
+        bearingEl.textContent =
+          "Target bearing: " + Math.round(b) + "° from north (no compass sensor)";
+      }
     }
   }
 
   function onOrientation(event) {
-    const heading = readHeading(event);
+    if (event.type === "deviceorientationabsolute") {
+      usingAbsoluteOrientation = true;
+    } else if (usingAbsoluteOrientation) {
+      return;
+    }
+
+    lastOrientationEvent = event;
+    var heading = CH.readDeviceHeading(event);
     if (heading != null) updateNeedle(heading);
   }
 
   function startOrientationTracking() {
     window.addEventListener("deviceorientationabsolute", onOrientation, true);
-    window.addEventListener("deviceorientation", onOrientation, true);
+    if (!("ondeviceorientationabsolute" in window)) {
+      window.addEventListener("deviceorientation", onOrientation, true);
+    }
+
+    if (screen.orientation && screen.orientation.addEventListener) {
+      screen.orientation.addEventListener("change", function () {
+        if (!lastOrientationEvent) return;
+        var heading = CH.readDeviceHeading(lastOrientationEvent);
+        if (heading != null) updateNeedle(heading);
+      });
+    }
+
     updateNeedle(null);
   }
 
@@ -104,9 +130,9 @@
       return true;
     }
     try {
-      const result = await DeviceOrientationEvent.requestPermission();
+      var result = await DeviceOrientationEvent.requestPermission();
       return result === "granted";
-    } catch {
+    } catch (err) {
       return false;
     }
   }
@@ -116,7 +142,7 @@
     watchId = navigator.geolocation.watchPosition(
       function (pos) {
         userPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        updateNeedle(null);
+        updateNeedle(lastDeviceHeading);
         setStatus("Compass active");
       },
       function (err) {
@@ -130,7 +156,7 @@
     setStatus("Starting…");
     btn.disabled = true;
 
-    const insecure = insecureMessage();
+    var insecure = insecureMessage();
     if (insecure) {
       setStatus(insecure);
       btn.disabled = false;
@@ -143,9 +169,11 @@
       return;
     }
 
-    const orientationOk = await requestOrientationPermission();
+    var orientationOk = await requestOrientationPermission();
     if (!orientationOk) {
-      setStatus("Compass sensor denied — distance and direction from north still work.");
+      setStatus(
+        "Compass sensor denied — arrow shows map direction only, not phone rotation.",
+      );
     } else {
       startOrientationTracking();
     }
@@ -153,7 +181,7 @@
     navigator.geolocation.getCurrentPosition(
       function (pos) {
         userPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        updateNeedle(null);
+        updateNeedle(lastDeviceHeading);
         startLocationWatch();
         setStatus("Compass active");
         btn.style.display = "none";
