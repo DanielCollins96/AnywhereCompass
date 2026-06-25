@@ -10,6 +10,25 @@ type DeviceOrientationEventConstructor = typeof DeviceOrientationEvent & {
   requestPermission?: () => Promise<PermissionState>;
 };
 
+function readHeading(event: DeviceOrientationEvent): number | null {
+  const e = event as DeviceOrientationEventWithWebkit;
+
+  if (
+    typeof e.webkitCompassHeading === "number" &&
+    !Number.isNaN(e.webkitCompassHeading)
+  ) {
+    return e.webkitCompassHeading;
+  }
+
+  if (event.alpha == null) return null;
+
+  if (event.absolute) {
+    return (360 - event.alpha) % 360;
+  }
+
+  return (360 - event.alpha) % 360;
+}
+
 export function useDeviceOrientation(enabled: boolean) {
   const [heading, setHeading] = useState<number | null>(null);
   const [needsPermission, setNeedsPermission] = useState(false);
@@ -47,27 +66,28 @@ export function useDeviceOrientation(enabled: boolean) {
     if (!enabled || !permissionGranted) return;
 
     const handleOrientation = (event: DeviceOrientationEvent) => {
-      const e = event as DeviceOrientationEventWithWebkit;
-      let nextHeading: number | null = null;
-
-      if (
-        typeof e.webkitCompassHeading === "number" &&
-        !Number.isNaN(e.webkitCompassHeading)
-      ) {
-        nextHeading = e.webkitCompassHeading;
-      } else if (event.absolute && event.alpha != null) {
-        nextHeading = (360 - event.alpha) % 360;
-      } else if (event.alpha != null) {
-        nextHeading = (360 - event.alpha) % 360;
-      }
-
+      const nextHeading = readHeading(event);
       if (nextHeading != null) setHeading(nextHeading);
     };
 
+    window.addEventListener("deviceorientationabsolute", handleOrientation, true);
     window.addEventListener("deviceorientation", handleOrientation, true);
-    return () =>
+
+    return () => {
+      window.removeEventListener(
+        "deviceorientationabsolute",
+        handleOrientation,
+        true,
+      );
       window.removeEventListener("deviceorientation", handleOrientation, true);
+    };
   }, [enabled, permissionGranted]);
 
-  return { heading, needsPermission, permissionGranted, requestPermission, error };
+  return {
+    heading,
+    needsPermission,
+    permissionGranted,
+    requestPermission,
+    error,
+  };
 }

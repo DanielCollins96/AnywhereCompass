@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { CompassNeedle } from "@/components/CompassNeedle";
-import { PermissionPrompt } from "@/components/PermissionPrompt";
 import { ShareTarget } from "@/components/ShareTarget";
 import { useCompassNeedle } from "@/hooks/useCompassNeedle";
 import { useDeviceOrientation } from "@/hooks/useDeviceOrientation";
@@ -19,17 +18,40 @@ type CompassViewProps = {
 };
 
 export function CompassView({ mode, target, showShare = true }: CompassViewProps) {
-  const [active, setActive] = useState(false);
-  const [enabling, setEnabling] = useState(false);
+  const [started, setStarted] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
+  const [starting, setStarting] = useState(false);
   const hapticRef = useRef(false);
 
-  const orientation = useDeviceOrientation(active);
-  const { position, error: geoError, loading: geoLoading } = useGeolocation(active);
-  const { needleAngle, distance, aligned, hasCompass } = useCompassNeedle(
-    position,
-    orientation.heading,
-    target,
-  );
+  const orientation = useDeviceOrientation(started);
+  const { position, error: geoError, loading: geoLoading, requestLocation } =
+    useGeolocation();
+  const { needleAngle, distance, aligned, hasCompass, targetBearing } =
+    useCompassNeedle(position, orientation.heading, target);
+
+  async function startCompass() {
+    setStarting(true);
+    setStartError(null);
+
+    const locationOk = await requestLocation();
+    if (!locationOk) {
+      setStarting(false);
+      return;
+    }
+
+    if (orientation.needsPermission) {
+      const compassOk = await orientation.requestPermission();
+      if (!compassOk) {
+        setStartError(
+          orientation.error ??
+            "Compass sensor denied. Distance still works; needle won't rotate with your phone.",
+        );
+      }
+    }
+
+    setStarted(true);
+    setStarting(false);
+  }
 
   useEffect(() => {
     if (aligned && !hapticRef.current && navigator.vibrate) {
@@ -39,25 +61,13 @@ export function CompassView({ mode, target, showShare = true }: CompassViewProps
     if (!aligned) hapticRef.current = false;
   }, [aligned]);
 
-  async function handleEnable() {
-    setEnabling(true);
-    const ok = await orientation.requestPermission();
-    if (ok) setActive(true);
-    setEnabling(false);
-  }
-
-  if (!active) {
-    return <PermissionPrompt onEnable={handleEnable} loading={enabling} />;
-  }
-
-  const shareUrl =
-    mode === "place" ? buildPlaceUrl(target) : undefined;
+  const shareUrl = mode === "place" ? buildPlaceUrl(target) : undefined;
   const title =
-    target.name ??
-    (mode === "parking" ? "Your car" : "Destination");
+    target.name ?? (mode === "parking" ? "Your car" : "Destination");
+  const needsStart = !started && !position;
 
   return (
-    <div className="relative flex min-h-dvh flex-col items-center justify-between bg-[#1a1410] px-4 py-8">
+    <div className="relative flex min-h-dvh flex-col bg-[#1a1410] px-4 py-8">
       <div className="flex w-full max-w-md items-start justify-between gap-2">
         <Link
           href="/"
@@ -82,72 +92,106 @@ export function CompassView({ mode, target, showShare = true }: CompassViewProps
         )}
       </div>
 
-      <div className="text-center">
-        <p className="text-xs uppercase tracking-widest text-[#d4af37]/70">
-          {mode === "parking" ? "Parking mode" : "Place mode"}
-        </p>
-        <h1 className="mt-1 max-w-xs font-serif text-lg text-[#f5e6c8] line-clamp-2">
-          {title}
-        </h1>
-      </div>
-
-      <div className="relative aspect-square w-full max-w-[min(85vw,360px)]">
-        <div
-          className="absolute inset-0 rounded-full border-4 border-[#d4af37]/80 shadow-[inset_0_0_40px_rgba(0,0,0,0.5),0_8px_32px_rgba(0,0,0,0.4)]"
-          style={{
-            background:
-              "radial-gradient(circle at 40% 35%, #3d3428 0%, #1a1410 55%, #0d0a08 100%)",
-          }}
-        >
-          {["N", "E", "S", "W"].map((dir, i) => (
-            <span
-              key={dir}
-              className={`absolute font-serif text-sm font-bold ${
-                dir === "N" ? "text-[#c0392b]" : "text-[#d4af37]/80"
-              }`}
-              style={{
-                top: i === 0 ? "6%" : i === 2 ? "auto" : "50%",
-                bottom: i === 2 ? "6%" : "auto",
-                left: i === 3 ? "6%" : i === 1 ? "auto" : "50%",
-                right: i === 1 ? "6%" : "auto",
-                transform:
-                  i === 0 || i === 2
-                    ? "translateX(-50%)"
-                    : "translateY(-50%)",
-              }}
-            >
-              {dir}
-            </span>
-          ))}
-
-          <div className="absolute inset-[12%] rounded-full border border-[#d4af37]/20" />
-          <div className="absolute inset-[22%] rounded-full border border-[#d4af37]/10" />
-          <div className="absolute inset-[32%] rounded-full border border-[#d4af37]/10" />
-
-          <CompassNeedle angle={needleAngle} />
+      {needsStart && (
+        <div className="mx-auto mt-6 w-full max-w-md space-y-3">
+          <p className="text-center text-sm text-[#c4b59a]">
+            Tap below — your browser will ask to use your location so the compass
+            can point toward <span className="text-[#f5e6c8]">{title}</span>.
+          </p>
+          <button
+            type="button"
+            onClick={() => void startCompass()}
+            disabled={starting}
+            className="w-full rounded-full border-2 border-[#d4af37] bg-[#2a2218] px-6 py-4 text-base font-medium text-[#f5e6c8] disabled:opacity-50"
+          >
+            {starting ? "Requesting location…" : "Allow location & start compass"}
+          </button>
+          {(startError || geoError) && (
+            <p className="rounded-xl border border-red-400/40 bg-red-950/40 px-4 py-3 text-sm text-red-200">
+              {startError ?? geoError}
+            </p>
+          )}
         </div>
-      </div>
+      )}
 
-      <div className="text-center">
-        {distance != null && (
-          <p className="font-serif text-3xl text-[#f5e6c8]">
-            {formatDistance(distance)}
+      <div className="flex flex-1 flex-col items-center justify-center gap-6">
+        <div className="text-center">
+          <p className="text-xs uppercase tracking-widest text-[#d4af37]/70">
+            {mode === "parking" ? "Parking mode" : "Place mode"}
           </p>
-        )}
-        {geoLoading && (
-          <p className="mt-2 text-xs text-[#c4b59a]">Getting location…</p>
-        )}
-        {geoError && (
-          <p className="mt-2 text-xs text-red-300">{geoError}</p>
-        )}
-        {!hasCompass && !geoLoading && (
-          <p className="mt-2 text-xs text-[#c4b59a]">
-            Arrow shows direction from north
-          </p>
-        )}
-        {aligned && (
-          <p className="mt-2 text-xs text-[#5dade2]">You&apos;re facing it</p>
-        )}
+          <h1 className="mt-1 max-w-xs font-serif text-lg text-[#f5e6c8] line-clamp-2">
+            {title}
+          </h1>
+        </div>
+
+        <div className="relative aspect-square w-full max-w-[min(85vw,360px)]">
+          <div
+            className="absolute inset-0 rounded-full border-4 border-[#d4af37]/80 shadow-[inset_0_0_40px_rgba(0,0,0,0.5),0_8px_32px_rgba(0,0,0,0.4)]"
+            style={{
+              background:
+                "radial-gradient(circle at 40% 35%, #3d3428 0%, #1a1410 55%, #0d0a08 100%)",
+            }}
+          >
+            {["N", "E", "S", "W"].map((dir, i) => (
+              <span
+                key={dir}
+                className={`absolute font-serif text-sm font-bold ${
+                  dir === "N" ? "text-[#c0392b]" : "text-[#d4af37]/80"
+                }`}
+                style={{
+                  top: i === 0 ? "6%" : i === 2 ? "auto" : "50%",
+                  bottom: i === 2 ? "6%" : "auto",
+                  left: i === 3 ? "6%" : i === 1 ? "auto" : "50%",
+                  right: i === 1 ? "6%" : "auto",
+                  transform:
+                    i === 0 || i === 2
+                      ? "translateX(-50%)"
+                      : "translateY(-50%)",
+                }}
+              >
+                {dir}
+              </span>
+            ))}
+
+            <div className="absolute inset-[12%] rounded-full border border-[#d4af37]/20" />
+            <div className="absolute inset-[22%] rounded-full border border-[#d4af37]/10" />
+            <div className="absolute inset-[32%] rounded-full border border-[#d4af37]/10" />
+
+            <CompassNeedle angle={needleAngle} />
+          </div>
+        </div>
+
+        <div className="space-y-2 text-center">
+          {distance != null && (
+            <p className="font-serif text-3xl text-[#f5e6c8]">
+              {formatDistance(distance)}
+            </p>
+          )}
+          {targetBearing != null && position && !hasCompass && (
+            <p className="text-sm text-[#c4b59a]">
+              Target bearing: {Math.round(targetBearing)}° from north
+            </p>
+          )}
+          {geoLoading && (
+            <p className="text-xs text-[#c4b59a]">Getting your location…</p>
+          )}
+          {started && geoError && (
+            <p className="text-xs text-red-300">{geoError}</p>
+          )}
+          {hasCompass && (
+            <p className="text-xs text-[#5dade2]">
+              Rotate your device — needle points to target
+            </p>
+          )}
+          {position && !hasCompass && !geoLoading && (
+            <p className="text-xs text-[#c4b59a]">
+              Laptops often have no compass sensor — arrow shows map direction
+            </p>
+          )}
+          {aligned && (
+            <p className="text-xs text-[#5dade2]">You&apos;re facing it</p>
+          )}
+        </div>
       </div>
     </div>
   );
