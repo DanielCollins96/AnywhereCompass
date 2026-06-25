@@ -1,4 +1,5 @@
 import Script from "next/script";
+import { VanillaBoot } from "@/components/VanillaBoot";
 
 export function PinPickerShell() {
   return (
@@ -40,6 +41,8 @@ export function PinPickerShell() {
           Loading map…
         </p>
       </div>
+
+      <VanillaBoot kind="pin-picker" bootKey="pin" />
 
       <Script src="/pin-picker.js" strategy="afterInteractive" />
     </>

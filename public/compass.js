@@ -1,4 +1,9 @@
-(function () {
+window.bootAnywhereCompass = function () {
+  if (window.__compassCleanup) {
+    window.__compassCleanup();
+    window.__compassCleanup = null;
+  }
+
   var CH = window.CompassHeading;
   if (!CH) return;
 
@@ -72,8 +77,7 @@
 
     var heading = lastDeviceHeading;
     var b = bearing(userPos, target);
-    var angle =
-      heading != null ? CH.needleAngle(b, heading) : b;
+    var angle = heading != null ? CH.needleAngle(b, heading) : b;
 
     needleWrap.style.transform = "rotate(" + angle + "deg)";
 
@@ -103,18 +107,18 @@
     if (heading != null) updateNeedle(heading);
   }
 
+  function onScreenChange() {
+    if (!lastOrientationEvent) return;
+    var heading = CH.readDeviceHeading(lastOrientationEvent);
+    if (heading != null) updateNeedle(heading);
+  }
+
   function startOrientationTracking() {
     window.addEventListener("deviceorientationabsolute", onOrientation, true);
-    if (!("ondeviceorientationabsolute" in window)) {
-      window.addEventListener("deviceorientation", onOrientation, true);
-    }
+    window.addEventListener("deviceorientation", onOrientation, true);
 
     if (screen.orientation && screen.orientation.addEventListener) {
-      screen.orientation.addEventListener("change", function () {
-        if (!lastOrientationEvent) return;
-        var heading = CH.readDeviceHeading(lastOrientationEvent);
-        if (heading != null) updateNeedle(heading);
-      });
+      screen.orientation.addEventListener("change", onScreenChange);
     }
 
     updateNeedle(null);
@@ -203,5 +207,27 @@
     btn.addEventListener("click", onStartClick);
   }
 
+  if (needleWrap) {
+    needleWrap.style.transform = "rotate(0deg)";
+  }
+  if (distanceEl) distanceEl.textContent = "";
+  if (bearingEl) bearingEl.textContent = "";
   setStatus("Tap the button below to allow location.");
-})();
+
+  window.__compassCleanup = function () {
+    if (watchId != null) {
+      navigator.geolocation.clearWatch(watchId);
+      watchId = null;
+    }
+    window.removeEventListener("deviceorientationabsolute", onOrientation, true);
+    window.removeEventListener("deviceorientation", onOrientation, true);
+    if (screen.orientation && screen.orientation.removeEventListener) {
+      screen.orientation.removeEventListener("change", onScreenChange);
+    }
+    if (btn) {
+      btn.removeEventListener("click", onStartClick);
+      btn.disabled = false;
+      btn.style.display = "";
+    }
+  };
+};

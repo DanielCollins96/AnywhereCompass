@@ -3,6 +3,9 @@ import { CompassShell } from "@/components/CompassShell";
 import { ParkingCompassLoader } from "@/components/CompassView";
 import { fetchPhotonSearch } from "@/lib/photon";
 import { parseToParam, type CompassTarget } from "@/lib/target-url";
+import { unstable_noStore as noStore } from "next/cache";
+
+export const dynamic = "force-dynamic";
 
 type PageProps = {
   searchParams: Promise<{
@@ -14,6 +17,7 @@ type PageProps = {
 };
 
 export default async function CompassPage({ searchParams }: PageProps) {
+  noStore();
   const params = await searchParams;
 
   if (params.mode === "parking") {
@@ -56,5 +60,10 @@ export default async function CompassPage({ searchParams }: PageProps) {
     );
   }
 
-  return <CompassShell target={target} />;
+  return (
+    <CompassShell
+      key={`${target.lat},${target.lng},${target.name ?? ""}`}
+      target={target}
+    />
+  );
 }

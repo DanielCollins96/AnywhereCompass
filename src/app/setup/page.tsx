@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { PinPickerShell } from "@/components/PinPickerShell";
 import { fetchPhotonSearch } from "@/lib/photon";
+import { unstable_noStore as noStore } from "next/cache";
+
+export const dynamic = "force-dynamic";
 
 type SetupPageProps = {
   searchParams: Promise<{
@@ -10,6 +13,7 @@ type SetupPageProps = {
 };
 
 export default async function SetupPage({ searchParams }: SetupPageProps) {
+  noStore();
   const params = await searchParams;
   const view = params.view === "pin" ? "pin" : "search";
   const q = params.q?.trim() ?? "";
@@ -109,12 +113,12 @@ export default async function SetupPage({ searchParams }: SetupPageProps) {
 
                   return (
                     <li key={`${place.lat}-${place.lng}`}>
-                      <Link
+                      <a
                         href={`/c?${search.toString()}`}
                         className="block w-full rounded-xl border border-[#d4af37]/30 bg-[#2a2218] px-4 py-4 text-left text-base leading-snug text-[#f5e6c8] active:bg-[#3a3020]"
                       >
                         {place.name}
-                      </Link>
+                      </a>
                     </li>
                   );
                 })}

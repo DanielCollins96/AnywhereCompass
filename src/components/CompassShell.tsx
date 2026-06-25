@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Script from "next/script";
+import { VanillaBoot } from "@/components/VanillaBoot";
 import type { CompassTarget } from "@/lib/target-url";
 
 type CompassShellProps = {
@@ -46,6 +47,11 @@ export function CompassShell({ target }: CompassShellProps) {
             Ready
           </p>
         </div>
+
+        <VanillaBoot
+          kind="compass"
+          bootKey={`${target.lat},${target.lng},${title}`}
+        />
 
         <div className="flex flex-1 flex-col items-center justify-center gap-6">
           <div className="text-center">

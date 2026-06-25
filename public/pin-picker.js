@@ -1,4 +1,9 @@
-(function () {
+window.bootPinPicker = function () {
+  if (window.__pinPickerCleanup) {
+    window.__pinPickerCleanup();
+    window.__pinPickerCleanup = null;
+  }
+
   var mapEl = document.getElementById("pin-map");
   if (!mapEl) return;
 
@@ -45,6 +50,10 @@
     setStatus('Pin placed — tap "Use this pin" when ready.');
   }
 
+  function onMapClick(e) {
+    showPin(e.latlng.lat, e.latlng.lng);
+  }
+
   function initMap() {
     fixDefaultIcon();
     map = L.map(mapEl, { scrollWheelZoom: true }).setView([40.7128, -74.006], 13);
@@ -54,9 +63,7 @@
       maxZoom: 19,
     }).addTo(map);
 
-    map.on("click", function (e) {
-      showPin(e.latlng.lat, e.latlng.lng);
-    });
+    map.on("click", onMapClick);
 
     setTimeout(function () {
       map.invalidateSize();
@@ -106,11 +113,16 @@
     window.location.href = "/c?" + params.toString();
   }
 
-  function boot() {
-    if (useBtn) {
-      useBtn.addEventListener("click", onUsePin);
-    }
+  if (useBtn) {
+    useBtn.hidden = true;
+    useBtn.disabled = false;
+    useBtn.textContent = "Use this pin";
+    useBtn.addEventListener("click", onUsePin);
+  }
+  if (coordsEl) coordsEl.hidden = true;
+  setStatus("Loading map…");
 
+  function startMap() {
     if (window.L) {
       initMap();
       return;
@@ -125,5 +137,19 @@
     document.head.appendChild(s);
   }
 
-  boot();
-})();
+  startMap();
+
+  window.__pinPickerCleanup = function () {
+    if (map) {
+      map.off("click", onMapClick);
+      map.remove();
+      map = null;
+      marker = null;
+    }
+    if (useBtn) {
+      useBtn.removeEventListener("click", onUsePin);
+      useBtn.hidden = true;
+      useBtn.disabled = false;
+    }
+  };
+};
