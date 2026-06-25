@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { LatLng } from "@/lib/bearing";
+import { rememberLocationGranted, clearLocationGranted } from "@/lib/location-preference";
 
 function insecureContextMessage(): string | null {
   if (typeof window === "undefined") return null;
@@ -57,9 +58,13 @@ export function useGeolocation() {
           });
           setTracking(true);
           setLoading(false);
+          rememberLocationGranted();
           resolve(true);
         },
         (err) => {
+          if (err.code === err.PERMISSION_DENIED) {
+            clearLocationGranted();
+          }
           setError(formatGeoError(err));
           setLoading(false);
           resolve(false);

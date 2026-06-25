@@ -10,6 +10,7 @@ import { useGeolocation } from "@/hooks/useGeolocation";
 import { formatDistance } from "@/lib/bearing";
 import { getParkingSpot, clearParkingSpot } from "@/lib/parking-storage";
 import { buildPlaceUrl, type CompassTarget } from "@/lib/target-url";
+import { shouldAutoStartLocation } from "@/lib/location-preference";
 
 type CompassViewProps = {
   mode: "place" | "parking";
@@ -21,6 +22,7 @@ export function CompassView({ mode, target, showShare = true }: CompassViewProps
   const [started, setStarted] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+  const autoStartedRef = useRef(false);
   const hapticRef = useRef(false);
 
   const orientation = useDeviceOrientation(started);
@@ -29,7 +31,7 @@ export function CompassView({ mode, target, showShare = true }: CompassViewProps
   const { needleAngle, distance, aligned, hasCompass, targetBearing } =
     useCompassNeedle(position, orientation.heading, target);
 
-  async function startCompass() {
+  async function startCompass(fromAuto = false) {
     setStarting(true);
     setStartError(null);
 
@@ -39,7 +41,15 @@ export function CompassView({ mode, target, showShare = true }: CompassViewProps
       return;
     }
 
-    if (orientation.needsPermission) {
+    const needsIosCompass =
+      typeof DeviceOrientationEvent !== "undefined" &&
+      typeof (
+        DeviceOrientationEvent as typeof DeviceOrientationEvent & {
+          requestPermission?: () => Promise<PermissionState>;
+        }
+      ).requestPermission === "function";
+
+    if (needsIosCompass && !fromAuto) {
       const compassOk = await orientation.requestPermission();
       if (!compassOk) {
         setStartError(
@@ -52,6 +62,15 @@ export function CompassView({ mode, target, showShare = true }: CompassViewProps
     setStarted(true);
     setStarting(false);
   }
+
+  useEffect(() => {
+    if (autoStartedRef.current) return;
+    autoStartedRef.current = true;
+
+    void shouldAutoStartLocation().then((ok) => {
+      if (ok) void startCompass(true);
+    });
+  }, []);
 
   useEffect(() => {
     if (aligned && !hapticRef.current && navigator.vibrate) {

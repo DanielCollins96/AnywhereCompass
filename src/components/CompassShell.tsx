@@ -28,7 +28,10 @@ export function CompassShell({ target }: CompassShellProps) {
           </Link>
         </div>
 
-        <div className="mx-auto mt-6 w-full max-w-md space-y-3">
+        <div
+          id="compass-prompt"
+          className="mx-auto mt-6 w-full max-w-md space-y-3"
+        >
           <p className="text-center text-sm text-[#c4b59a]">
             Tap below — your browser will ask to use your location so the compass
             can point toward <span className="text-[#f5e6c8]">{title}</span>.

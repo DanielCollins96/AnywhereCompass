@@ -16,20 +16,75 @@ window.bootAnywhereCompass = function () {
     name: root.dataset.name || "Destination",
   };
 
+  var promptEl = document.getElementById("compass-prompt");
   var btn = document.getElementById("compass-start-btn");
   var statusEl = document.getElementById("compass-status");
   var distanceEl = document.getElementById("compass-distance");
   var bearingEl = document.getElementById("compass-bearing");
   var needleWrap = document.getElementById("compass-needle-wrap");
+  var STORAGE_KEY = "anywhere-compass-location-granted";
 
   var userPos = null;
   var watchId = null;
   var lastDeviceHeading = null;
   var usingAbsoluteOrientation = false;
   var lastOrientationEvent = null;
+  var starting = false;
 
   function setStatus(text) {
     if (statusEl) statusEl.textContent = text;
+  }
+
+  function hidePrompt() {
+    if (promptEl) promptEl.hidden = true;
+  }
+
+  function showPrompt() {
+    if (promptEl) promptEl.hidden = false;
+  }
+
+  function rememberLocationGranted() {
+    try {
+      localStorage.setItem(STORAGE_KEY, "1");
+    } catch (err) {
+      /* private mode */
+    }
+  }
+
+  function clearLocationGranted() {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (err) {
+      /* private mode */
+    }
+  }
+
+  function hasRememberedLocation() {
+    try {
+      return localStorage.getItem(STORAGE_KEY) === "1";
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function queryLocationPermission() {
+    if (!navigator.permissions || !navigator.permissions.query) {
+      return Promise.resolve(null);
+    }
+    return navigator.permissions
+      .query({ name: "geolocation" })
+      .then(function (result) {
+        return result.state;
+      })
+      .catch(function () {
+        return null;
+      });
+  }
+
+  function shouldAutoStartLocation(permission) {
+    if (permission === "granted") return true;
+    if (permission === "denied") return false;
+    return hasRememberedLocation();
   }
 
   function toRad(deg) {
@@ -156,28 +211,45 @@ window.bootAnywhereCompass = function () {
     );
   }
 
-  async function onStartClick() {
+  function needsIosCompassPermission() {
+    return typeof DeviceOrientationEvent.requestPermission === "function";
+  }
+
+  async function startCompass(fromAuto) {
+    if (starting) return;
+    starting = true;
+
     setStatus("Starting…");
-    btn.disabled = true;
+    if (btn) btn.disabled = true;
 
     var insecure = insecureMessage();
     if (insecure) {
       setStatus(insecure);
-      btn.disabled = false;
+      if (btn) btn.disabled = false;
+      starting = false;
       return;
     }
 
     if (!navigator.geolocation) {
       setStatus("Geolocation is not available in this browser.");
-      btn.disabled = false;
+      if (btn) btn.disabled = false;
+      starting = false;
       return;
     }
 
-    var orientationOk = await requestOrientationPermission();
-    if (!orientationOk) {
-      setStatus(
-        "Compass sensor denied — arrow shows map direction only, not phone rotation.",
-      );
+    if (!fromAuto || !needsIosCompassPermission()) {
+      if (needsIosCompassPermission()) {
+        var orientationOk = await requestOrientationPermission();
+        if (!orientationOk) {
+          setStatus(
+            "Compass sensor denied — arrow shows map direction only, not phone rotation.",
+          );
+        } else {
+          startOrientationTracking();
+        }
+      } else {
+        startOrientationTracking();
+      }
     } else {
       startOrientationTracking();
     }
@@ -187,20 +259,29 @@ window.bootAnywhereCompass = function () {
         userPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         updateNeedle(lastDeviceHeading);
         startLocationWatch();
+        rememberLocationGranted();
+        hidePrompt();
         setStatus("Compass active");
-        btn.style.display = "none";
+        starting = false;
       },
       function (err) {
         var msg = err.message || "Could not get location";
         if (err.code === 1) {
+          clearLocationGranted();
+          showPrompt();
           msg =
             "Location denied. Click the lock icon in your address bar and allow location, then try again.";
         }
         setStatus(msg);
-        btn.disabled = false;
+        if (btn) btn.disabled = false;
+        starting = false;
       },
-      { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 },
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 60000 },
     );
+  }
+
+  function onStartClick() {
+    startCompass(false);
   }
 
   if (btn) {
@@ -212,7 +293,15 @@ window.bootAnywhereCompass = function () {
   }
   if (distanceEl) distanceEl.textContent = "";
   if (bearingEl) bearingEl.textContent = "";
-  setStatus("Tap the button below to allow location.");
+
+  queryLocationPermission().then(function (permission) {
+    if (shouldAutoStartLocation(permission)) {
+      hidePrompt();
+      startCompass(true);
+    } else {
+      setStatus("Tap the button below to allow location.");
+    }
+  });
 
   window.__compassCleanup = function () {
     if (watchId != null) {
@@ -227,7 +316,8 @@ window.bootAnywhereCompass = function () {
     if (btn) {
       btn.removeEventListener("click", onStartClick);
       btn.disabled = false;
-      btn.style.display = "";
     }
+    if (promptEl) promptEl.hidden = false;
+    starting = false;
   };
 };
