@@ -47,9 +47,11 @@ export function CompassView({ mode, target, showShare = true }: CompassViewProps
     setStarting(true);
     setStartError(null);
 
-    if (needsPermission && !fromAuto) {
-      const compassOk = await requestPermission();
-      if (!compassOk) {
+    if (needsPermission) {
+      // On auto-start there is no user gesture, so attempt silently: iOS
+      // grants without a prompt if motion was already allowed this session.
+      const compassOk = await requestPermission(fromAuto);
+      if (!compassOk && !fromAuto) {
         setStartError(
           orientationError ??
             "Compass permission was not granted. Distance still works, but the needle cannot follow phone rotation.",

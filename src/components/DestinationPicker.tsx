@@ -81,17 +81,19 @@ export function DestinationPicker() {
 
   return (
     <div className="flex min-h-[100dvh] flex-col bg-[#1a1410]">
-      <header className="sticky top-0 z-20 flex shrink-0 items-center gap-3 border-b border-[#d4af37]/20 bg-[#1a1410] px-4 py-4 pt-[max(1rem,env(safe-area-inset-top))]">
-        <Link
-          href="/"
-          className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full border border-[#d4af37]/40 bg-[#2a2218] px-4 text-sm font-medium text-[#f5e6c8]"
-        >
-          ← Home
-        </Link>
-        <h1 className="font-serif text-lg text-[#f5e6c8]">Point to a place</h1>
+      <header className="sticky top-0 z-20 shrink-0 border-b border-[#d4af37]/20 bg-[#1a1410] px-4 py-4 pt-[max(1rem,env(safe-area-inset-top))]">
+        <div className="mx-auto flex w-full max-w-xl items-center gap-3">
+          <Link
+            href="/"
+            className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full border border-[#d4af37]/40 bg-[#2a2218] px-4 text-sm font-medium text-[#f5e6c8]"
+          >
+            ← Home
+          </Link>
+          <h1 className="font-serif text-lg text-[#f5e6c8]">Point to a place</h1>
+        </div>
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 py-4">
+      <div className="mx-auto flex min-h-0 w-full max-w-xl flex-1 flex-col overflow-hidden px-4 py-4">
         <div className="mb-4 flex shrink-0 gap-2">
           {(["search", "map"] as const).map((t) => (
             <button
@@ -191,7 +193,7 @@ export function DestinationPicker() {
             </div>
           </div>
         ) : (
-          <div className="min-h-0 flex-1 overflow-y-auto pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <div className="flex min-h-0 flex-1 flex-col pb-[max(1rem,env(safe-area-inset-bottom))]">
             <MapPinPicker onSelect={goToCompass} />
           </div>
         )}

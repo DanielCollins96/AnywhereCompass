@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { readDeviceHeading } from "@/lib/compass-heading";
+import { rememberMotionGranted } from "@/lib/location-preference";
 
 type DeviceOrientationEventConstructor = typeof DeviceOrientationEvent & {
   requestPermission?: () => Promise<PermissionState>;
@@ -19,25 +20,29 @@ export function useDeviceOrientation(enabled: boolean) {
     typeof (DeviceOrientationEvent as DeviceOrientationEventConstructor)
       .requestPermission === "function";
 
-  const requestPermission = useCallback(async () => {
+  // silent=true is safe to call without a user gesture: iOS resolves
+  // immediately if motion was already granted this session, and rejects
+  // without showing a prompt otherwise.
+  const requestPermission = useCallback(async (silent = false) => {
     try {
       if (typeof DeviceOrientationEvent === "undefined") {
-        setError("Compass sensor is not available in this browser");
+        if (!silent) setError("Compass sensor is not available in this browser");
         return false;
       }
       const ctor = DeviceOrientationEvent as DeviceOrientationEventConstructor;
       if (typeof ctor.requestPermission === "function") {
         const result = await ctor.requestPermission();
         if (result !== "granted") {
-          setError("Compass permission denied");
+          if (!silent) setError("Compass permission denied");
           return false;
         }
+        rememberMotionGranted();
       }
       setPermissionGranted(true);
       setError(null);
       return true;
     } catch {
-      setError("Could not access compass");
+      if (!silent) setError("Could not access compass");
       return false;
     }
   }, []);
