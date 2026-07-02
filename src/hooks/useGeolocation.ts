@@ -2,7 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { LatLng } from "@/lib/bearing";
-import { rememberLocationGranted, clearLocationGranted } from "@/lib/location-preference";
+import {
+  rememberLocationGranted,
+  clearLocationGranted,
+  saveLastKnownPosition,
+} from "@/lib/location-preference";
 
 function insecureContextMessage(): string | null {
   if (typeof window === "undefined") return null;
@@ -31,6 +35,7 @@ export function useGeolocation() {
   const [loading, setLoading] = useState(false);
   const [tracking, setTracking] = useState(false);
   const watchIdRef = useRef<number | null>(null);
+  const lastSaveRef = useRef(0);
 
   const requestLocation = useCallback(async (): Promise<boolean> => {
     setLoading(true);
@@ -52,13 +57,15 @@ export function useGeolocation() {
     return new Promise((resolve) => {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
-          setPosition({
+          const next = {
             lat: pos.coords.latitude,
             lng: pos.coords.longitude,
-          });
+          };
+          setPosition(next);
           setTracking(true);
           setLoading(false);
           rememberLocationGranted();
+          saveLastKnownPosition(next);
           resolve(true);
         },
         (err) => {
@@ -81,11 +88,20 @@ export function useGeolocation() {
 
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
-        setPosition({
+        const next = {
           lat: pos.coords.latitude,
           lng: pos.coords.longitude,
-        });
+        };
+        setPosition(next);
         setError(null);
+        // GPS updates arrive ~every second; the stored "last position" only
+        // needs coarse freshness, so avoid a synchronous localStorage write
+        // on every fix.
+        const now = Date.now();
+        if (now - lastSaveRef.current > 30000) {
+          lastSaveRef.current = now;
+          saveLastKnownPosition(next);
+        }
       },
       (err) => {
         setError(formatGeoError(err));

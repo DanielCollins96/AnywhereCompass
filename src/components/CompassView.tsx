@@ -1,14 +1,19 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
-import { CompassNeedle } from "@/components/CompassNeedle";
+import { ArrivedMarker, CompassNeedle } from "@/components/CompassNeedle";
 import { ShareTarget } from "@/components/ShareTarget";
 import { useCompassNeedle } from "@/hooks/useCompassNeedle";
 import { useDeviceOrientation } from "@/hooks/useDeviceOrientation";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { formatDistance } from "@/lib/bearing";
-import { getParkingSpot, clearParkingSpot } from "@/lib/parking-storage";
+import {
+  clearParkingSpot,
+  getParkingSpot,
+  hasParkingSpot,
+  subscribeParkingSpot,
+} from "@/lib/parking-storage";
 import { buildPlaceUrl, type CompassTarget } from "@/lib/target-url";
 import { shouldAutoStartLocation } from "@/lib/location-preference";
 
@@ -18,22 +23,47 @@ type CompassViewProps = {
   showShare?: boolean;
 };
 
+// Close enough that pointing a needle is meaningless noise, so switch to
+// the "you're here" state. Note phone GPS accuracy is often 5-10m, so the
+// X may flicker at the boundary in poor signal.
+const ARRIVED_METERS = 5;
+
 export function CompassView({ mode, target, showShare = true }: CompassViewProps) {
   const [started, setStarted] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const autoStartedRef = useRef(false);
   const hapticRef = useRef(false);
+  const arrivedHapticRef = useRef(false);
 
   const orientation = useDeviceOrientation(started);
+  const {
+    error: orientationError,
+    heading,
+    needsPermission,
+    permissionGranted,
+    requestPermission,
+  } = orientation;
   const { position, error: geoError, loading: geoLoading, requestLocation } =
     useGeolocation();
   const { needleAngle, distance, aligned, hasCompass, targetBearing } =
-    useCompassNeedle(position, orientation.heading, target);
+    useCompassNeedle(position, heading, target);
 
-  async function startCompass(fromAuto = false) {
+  const startCompass = useCallback(async (fromAuto = false) => {
     setStarting(true);
     setStartError(null);
+
+    if (needsPermission) {
+      // On auto-start there is no user gesture, so attempt silently: iOS
+      // grants without a prompt if motion was already allowed this session.
+      const compassOk = await requestPermission(fromAuto);
+      if (!compassOk && !fromAuto) {
+        setStartError(
+          orientationError ??
+            "Compass permission was not granted. Distance still works, but the needle cannot follow phone rotation.",
+        );
+      }
+    }
 
     const locationOk = await requestLocation();
     if (!locationOk) {
@@ -41,27 +71,9 @@ export function CompassView({ mode, target, showShare = true }: CompassViewProps
       return;
     }
 
-    const needsIosCompass =
-      typeof DeviceOrientationEvent !== "undefined" &&
-      typeof (
-        DeviceOrientationEvent as typeof DeviceOrientationEvent & {
-          requestPermission?: () => Promise<PermissionState>;
-        }
-      ).requestPermission === "function";
-
-    if (needsIosCompass && !fromAuto) {
-      const compassOk = await orientation.requestPermission();
-      if (!compassOk) {
-        setStartError(
-          orientation.error ??
-            "Compass sensor denied. Distance still works; needle won't rotate with your phone.",
-        );
-      }
-    }
-
     setStarted(true);
     setStarting(false);
-  }
+  }, [needsPermission, orientationError, requestLocation, requestPermission]);
 
   useEffect(() => {
     if (autoStartedRef.current) return;
@@ -70,7 +82,9 @@ export function CompassView({ mode, target, showShare = true }: CompassViewProps
     void shouldAutoStartLocation().then((ok) => {
       if (ok) void startCompass(true);
     });
-  }, []);
+  }, [startCompass]);
+
+  const arrived = distance != null && distance <= ARRIVED_METERS;
 
   useEffect(() => {
     if (aligned && !hapticRef.current && navigator.vibrate) {
@@ -79,6 +93,14 @@ export function CompassView({ mode, target, showShare = true }: CompassViewProps
     }
     if (!aligned) hapticRef.current = false;
   }, [aligned]);
+
+  useEffect(() => {
+    if (arrived && !arrivedHapticRef.current) {
+      arrivedHapticRef.current = true;
+      navigator.vibrate?.([40, 60, 40]);
+    }
+    if (!arrived) arrivedHapticRef.current = false;
+  }, [arrived]);
 
   const shareUrl = mode === "place" ? buildPlaceUrl(target) : undefined;
   const title =
@@ -148,6 +170,30 @@ export function CompassView({ mode, target, showShare = true }: CompassViewProps
         </div>
       )}
 
+      {started &&
+        position &&
+        needsPermission &&
+        !permissionGranted && (
+          <div className="mx-auto mt-4 w-full max-w-md space-y-2">
+            <button
+              type="button"
+              onClick={() => void requestPermission()}
+              className="w-full rounded-full border border-[#5dade2] bg-[#2a2218] px-6 py-3 text-sm font-medium text-[#f5e6c8]"
+            >
+              Enable compass rotation
+            </button>
+            <p className="text-center text-xs text-[#c4b59a]">
+              Location is active. iPhone and iPad require a separate tap before
+              sharing compass sensor data.
+            </p>
+            {orientationError && (
+              <p className="text-center text-xs text-red-300">
+                {orientationError}
+              </p>
+            )}
+          </div>
+        )}
+
       <div className="flex flex-1 flex-col items-center justify-center gap-6">
         <div className="text-center">
           <p className="text-xs uppercase tracking-widest text-[#d4af37]/70">
@@ -199,39 +245,53 @@ export function CompassView({ mode, target, showShare = true }: CompassViewProps
             <div className="absolute inset-[22%] rounded-full border border-[#d4af37]/10" />
             <div className="absolute inset-[32%] rounded-full border border-[#d4af37]/10" />
 
-            <CompassNeedle angle={needleAngle} />
+            {arrived ? <ArrivedMarker /> : <CompassNeedle angle={needleAngle} />}
           </div>
         </div>
 
         <div className="space-y-2 text-center">
-          {distance != null && (
-            <p className="font-serif text-3xl text-[#f5e6c8]">
-              {formatDistance(distance)}
-            </p>
-          )}
-          {targetBearing != null && position && !hasCompass && (
-            <p className="text-sm text-[#c4b59a]">
-              Target bearing: {Math.round(targetBearing)}° from north
-            </p>
-          )}
-          {geoLoading && (
-            <p className="text-xs text-[#c4b59a]">Getting your location…</p>
-          )}
-          {started && geoError && (
-            <p className="text-xs text-red-300">{geoError}</p>
-          )}
-          {hasCompass && (
-            <p className="text-xs text-[#5dade2]">
-              Rotate your device — needle points to target
-            </p>
-          )}
-          {position && !hasCompass && !geoLoading && (
-            <p className="text-xs text-[#c4b59a]">
-              Laptops often have no compass sensor — arrow shows map direction
-            </p>
-          )}
-          {aligned && (
-            <p className="text-xs text-[#5dade2]">You&apos;re facing it</p>
+          {arrived ? (
+            <>
+              <p className="font-serif text-3xl text-[#d4af37]">
+                X marks the spot
+              </p>
+              <p className="text-sm text-[#c4b59a]">
+                You&apos;re within {formatDistance(distance)} —{" "}
+                {mode === "parking" ? "your car is right here" : "you made it"}
+              </p>
+            </>
+          ) : (
+            <>
+              {distance != null && (
+                <p className="font-serif text-3xl text-[#f5e6c8]">
+                  {formatDistance(distance)}
+                </p>
+              )}
+              {targetBearing != null && position && !hasCompass && (
+                <p className="text-sm text-[#c4b59a]">
+                  Target bearing: {Math.round(targetBearing)}° from north
+                </p>
+              )}
+              {geoLoading && (
+                <p className="text-xs text-[#c4b59a]">Getting your location…</p>
+              )}
+              {started && geoError && (
+                <p className="text-xs text-red-300">{geoError}</p>
+              )}
+              {hasCompass && (
+                <p className="text-xs text-[#5dade2]">
+                  Rotate your device — needle points to target
+                </p>
+              )}
+              {position && !hasCompass && !geoLoading && (
+                <p className="text-xs text-[#c4b59a]">
+                  Laptops often have no compass sensor — arrow shows map direction
+                </p>
+              )}
+              {aligned && (
+                <p className="text-xs text-[#5dade2]">You&apos;re facing it</p>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -240,18 +300,19 @@ export function CompassView({ mode, target, showShare = true }: CompassViewProps
 }
 
 export function ParkingCompassLoader() {
-  const [target, setTarget] = useState<CompassTarget | null>(null);
-
-  useEffect(() => {
-    const spot = getParkingSpot();
-    if (spot) {
-      setTarget({
+  const hasParking = useSyncExternalStore(
+    subscribeParkingSpot,
+    hasParkingSpot,
+    () => false,
+  );
+  const spot = hasParking ? getParkingSpot() : null;
+  const target = spot
+    ? {
         lat: spot.lat,
         lng: spot.lng,
         name: spot.label ?? "Your car",
-      });
-    }
-  }, []);
+      }
+    : null;
 
   if (!target) {
     return (

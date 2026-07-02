@@ -1,3 +1,5 @@
+import { isValidCoordinate } from "@/lib/target-url";
+
 export type GeocodeResult = {
   lat: number;
   lng: number;
@@ -36,16 +38,19 @@ export function formatPhotonName(
 }
 
 export function parsePhotonSearch(data: PhotonResponse): GeocodeResult[] {
-  return data.features.map((feature) => ({
-    lat: feature.geometry.coordinates[1],
-    lng: feature.geometry.coordinates[0],
-    name: formatPhotonName(feature.properties),
-  }));
+  return data.features.flatMap((feature) => {
+    const lat = feature.geometry.coordinates[1];
+    const lng = feature.geometry.coordinates[0];
+    if (!isValidCoordinate(lat, lng)) return [];
+    return [{ lat, lng, name: formatPhotonName(feature.properties) }];
+  });
 }
 
 export function parsePhotonReverse(data: PhotonResponse): string | null {
   const feature = data.features[0];
   if (!feature) return null;
+  const [lng, lat] = feature.geometry.coordinates;
+  if (!isValidCoordinate(lat, lng)) return null;
   return formatPhotonName(feature.properties);
 }
 

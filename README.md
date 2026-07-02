@@ -9,18 +9,23 @@ A mobile-first toy compass — point your phone and the needle shows which way t
 
 ## Run locally
 
+Requires Node.js 20.9 or newer.
+
 ```bash
-npm install
+nvm use
+npm ci
 npm run dev
 ```
 
-Open on your phone over HTTPS for compass sensors (use [ngrok](https://ngrok.com) or deploy to Vercel).
+Open on your phone over HTTPS for location and compass sensors. `localhost`
+works on the development computer; a phone needs an HTTPS tunnel such as
+[ngrok](https://ngrok.com) or a deployed URL.
 
 ## Deploy
 
-Push to GitHub and deploy on [Vercel](https://vercel.com). No backend or env vars required.
-
-Optional: set `NEXT_PUBLIC_MAPBOX_TOKEN` if you swap in Mapbox later (currently uses OpenStreetMap + Nominatim).
+Push to GitHub and deploy on [Vercel](https://vercel.com). No environment
+variables are required. The application includes Next.js route handlers that
+proxy Photon geocoding requests.
 
 ## Demo
 
@@ -30,4 +35,14 @@ Optional: set `NEXT_PUBLIC_MAPBOX_TOKEN` if you swap in Mapbox later (currently 
 
 ## Tech
 
-Next.js 15 · TypeScript · Tailwind · Framer Motion · Leaflet · Nominatim geocoding
+Next.js 16 · React 19 · TypeScript · Tailwind CSS 4 · Framer Motion · Leaflet ·
+Photon geocoding
+
+## Checks
+
+```bash
+npm run lint
+npm run typecheck
+npm test
+npm run build
+```

@@ -36,12 +36,21 @@ export function ShareTarget({ url, label = "Share destination" }: ShareTargetPro
         <div
           className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center"
           onClick={() => setOpen(false)}
+          role="presentation"
         >
           <div
             className="w-full max-w-sm rounded-2xl border border-[#d4af37]/30 bg-[#1a1410] p-6 text-center"
             onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="share-dialog-title"
           >
-            <h2 className="mb-4 font-serif text-lg text-[#f5e6c8]">{label}</h2>
+            <h2
+              id="share-dialog-title"
+              className="mb-4 font-serif text-lg text-[#f5e6c8]"
+            >
+              {label}
+            </h2>
             <div className="mx-auto mb-4 inline-block rounded-xl bg-white p-3">
               <QRCodeSVG value={url} size={160} />
             </div>
