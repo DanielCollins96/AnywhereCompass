@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
-import { CompassNeedle } from "@/components/CompassNeedle";
+import { ArrivedMarker, CompassNeedle } from "@/components/CompassNeedle";
 import { ShareTarget } from "@/components/ShareTarget";
 import { useCompassNeedle } from "@/hooks/useCompassNeedle";
 import { useDeviceOrientation } from "@/hooks/useDeviceOrientation";
@@ -23,12 +23,17 @@ type CompassViewProps = {
   showShare?: boolean;
 };
 
+// Within GPS accuracy of the target — pointing a needle is meaningless noise
+// at this range, so switch to the "you're here" state.
+const ARRIVED_METERS = 15;
+
 export function CompassView({ mode, target, showShare = true }: CompassViewProps) {
   const [started, setStarted] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const autoStartedRef = useRef(false);
   const hapticRef = useRef(false);
+  const arrivedHapticRef = useRef(false);
 
   const orientation = useDeviceOrientation(started);
   const {
@@ -78,6 +83,8 @@ export function CompassView({ mode, target, showShare = true }: CompassViewProps
     });
   }, [startCompass]);
 
+  const arrived = distance != null && distance <= ARRIVED_METERS;
+
   useEffect(() => {
     if (aligned && !hapticRef.current && navigator.vibrate) {
       navigator.vibrate(10);
@@ -85,6 +92,14 @@ export function CompassView({ mode, target, showShare = true }: CompassViewProps
     }
     if (!aligned) hapticRef.current = false;
   }, [aligned]);
+
+  useEffect(() => {
+    if (arrived && !arrivedHapticRef.current) {
+      arrivedHapticRef.current = true;
+      navigator.vibrate?.([40, 60, 40]);
+    }
+    if (!arrived) arrivedHapticRef.current = false;
+  }, [arrived]);
 
   const shareUrl = mode === "place" ? buildPlaceUrl(target) : undefined;
   const title =
@@ -229,39 +244,53 @@ export function CompassView({ mode, target, showShare = true }: CompassViewProps
             <div className="absolute inset-[22%] rounded-full border border-[#d4af37]/10" />
             <div className="absolute inset-[32%] rounded-full border border-[#d4af37]/10" />
 
-            <CompassNeedle angle={needleAngle} />
+            {arrived ? <ArrivedMarker /> : <CompassNeedle angle={needleAngle} />}
           </div>
         </div>
 
         <div className="space-y-2 text-center">
-          {distance != null && (
-            <p className="font-serif text-3xl text-[#f5e6c8]">
-              {formatDistance(distance)}
-            </p>
-          )}
-          {targetBearing != null && position && !hasCompass && (
-            <p className="text-sm text-[#c4b59a]">
-              Target bearing: {Math.round(targetBearing)}° from north
-            </p>
-          )}
-          {geoLoading && (
-            <p className="text-xs text-[#c4b59a]">Getting your location…</p>
-          )}
-          {started && geoError && (
-            <p className="text-xs text-red-300">{geoError}</p>
-          )}
-          {hasCompass && (
-            <p className="text-xs text-[#5dade2]">
-              Rotate your device — needle points to target
-            </p>
-          )}
-          {position && !hasCompass && !geoLoading && (
-            <p className="text-xs text-[#c4b59a]">
-              Laptops often have no compass sensor — arrow shows map direction
-            </p>
-          )}
-          {aligned && (
-            <p className="text-xs text-[#5dade2]">You&apos;re facing it</p>
+          {arrived ? (
+            <>
+              <p className="font-serif text-3xl text-[#d4af37]">
+                X marks the spot
+              </p>
+              <p className="text-sm text-[#c4b59a]">
+                You&apos;re within {formatDistance(distance)} —{" "}
+                {mode === "parking" ? "your car is right here" : "you made it"}
+              </p>
+            </>
+          ) : (
+            <>
+              {distance != null && (
+                <p className="font-serif text-3xl text-[#f5e6c8]">
+                  {formatDistance(distance)}
+                </p>
+              )}
+              {targetBearing != null && position && !hasCompass && (
+                <p className="text-sm text-[#c4b59a]">
+                  Target bearing: {Math.round(targetBearing)}° from north
+                </p>
+              )}
+              {geoLoading && (
+                <p className="text-xs text-[#c4b59a]">Getting your location…</p>
+              )}
+              {started && geoError && (
+                <p className="text-xs text-red-300">{geoError}</p>
+              )}
+              {hasCompass && (
+                <p className="text-xs text-[#5dade2]">
+                  Rotate your device — needle points to target
+                </p>
+              )}
+              {position && !hasCompass && !geoLoading && (
+                <p className="text-xs text-[#c4b59a]">
+                  Laptops often have no compass sensor — arrow shows map direction
+                </p>
+              )}
+              {aligned && (
+                <p className="text-xs text-[#5dade2]">You&apos;re facing it</p>
+              )}
+            </>
           )}
         </div>
       </div>

@@ -14,6 +14,7 @@ export function useDeviceOrientation(enabled: boolean) {
   const [error, setError] = useState<string | null>(null);
   const usingAbsoluteRef = useRef(false);
   const lastEventRef = useRef<DeviceOrientationEvent | null>(null);
+  const lastHeadingRef = useRef<number | null>(null);
 
   const needsPermission =
     typeof DeviceOrientationEvent !== "undefined" &&
@@ -61,7 +62,18 @@ export function useDeviceOrientation(enabled: boolean) {
 
       lastEventRef.current = event;
       const nextHeading = readDeviceHeading(event);
-      if (nextHeading != null) setHeading(nextHeading);
+      if (nextHeading == null) return;
+
+      // Sensors fire at ~60Hz with sub-degree jitter; updating state that
+      // often re-renders the whole compass for invisible movement. Only
+      // propagate changes of at least 1 degree.
+      const prev = lastHeadingRef.current;
+      if (prev != null) {
+        const diff = Math.abs(((nextHeading - prev + 540) % 360) - 180);
+        if (diff < 1) return;
+      }
+      lastHeadingRef.current = nextHeading;
+      setHeading(nextHeading);
     };
 
     window.addEventListener("deviceorientationabsolute", handleOrientation, true);
@@ -71,7 +83,9 @@ export function useDeviceOrientation(enabled: boolean) {
       const event = lastEventRef.current;
       if (!event) return;
       const nextHeading = readDeviceHeading(event);
-      if (nextHeading != null) setHeading(nextHeading);
+      if (nextHeading == null) return;
+      lastHeadingRef.current = nextHeading;
+      setHeading(nextHeading);
     };
     screen.orientation?.addEventListener("change", onScreenChange);
 

@@ -35,6 +35,7 @@ export function useGeolocation() {
   const [loading, setLoading] = useState(false);
   const [tracking, setTracking] = useState(false);
   const watchIdRef = useRef<number | null>(null);
+  const lastSaveRef = useRef(0);
 
   const requestLocation = useCallback(async (): Promise<boolean> => {
     setLoading(true);
@@ -93,7 +94,14 @@ export function useGeolocation() {
         };
         setPosition(next);
         setError(null);
-        saveLastKnownPosition(next);
+        // GPS updates arrive ~every second; the stored "last position" only
+        // needs coarse freshness, so avoid a synchronous localStorage write
+        // on every fix.
+        const now = Date.now();
+        if (now - lastSaveRef.current > 30000) {
+          lastSaveRef.current = now;
+          saveLastKnownPosition(next);
+        }
       },
       (err) => {
         setError(formatGeoError(err));
