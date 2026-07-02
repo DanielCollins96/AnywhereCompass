@@ -23,9 +23,10 @@ type CompassViewProps = {
   showShare?: boolean;
 };
 
-// Within GPS accuracy of the target — pointing a needle is meaningless noise
-// at this range, so switch to the "you're here" state.
-const ARRIVED_METERS = 15;
+// Close enough that pointing a needle is meaningless noise, so switch to
+// the "you're here" state. Note phone GPS accuracy is often 5-10m, so the
+// X may flicker at the boundary in poor signal.
+const ARRIVED_METERS = 5;
 
 export function CompassView({ mode, target, showShare = true }: CompassViewProps) {
   const [started, setStarted] = useState(false);
